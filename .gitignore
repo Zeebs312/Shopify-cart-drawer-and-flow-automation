@@ -1,0 +1,32 @@
+# Shopify CLI & local environment
+.shopify/
+.env
+.env.*
+!.env.example
+
+# Dependencies & build output (if you add Tailwind, Vite, or tooling)
+node_modules/
+dist/
+build/
+
+# Windows & macOS system files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editor / IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs & temporary files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
