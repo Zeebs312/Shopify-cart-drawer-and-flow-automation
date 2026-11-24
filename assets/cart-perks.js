@@ -1,11 +1,14 @@
 class CartPerksController {
   constructor() {
     this.wasUnlocked = false;
+    this.noteDebounceTimer = null;
     this.init();
   }
 
   init() {
     document.addEventListener('click', (event) => this.handleUpsellClick(event));
+    document.addEventListener('change', (event) => this.handleGiftToggle(event));
+    document.addEventListener('input', (event) => this.handleNoteInput(event));
 
     const drawer = document.querySelector('#cart-drawer');
     if (!drawer) return;
@@ -32,7 +35,15 @@ class CartPerksController {
           'X-Requested-With': 'XMLHttpRequest',
         },
         body: JSON.stringify({
-          items: [{ id: variantId, quantity: 1 }],
+          items: [
+            {
+              id: variantId,
+              quantity: 1,
+              properties: {
+                _added_from: 'cart_drawer_upsell',
+              },
+            },
+          ],
           sections: 'cart-drawer-section',
           sections_url: window.location.pathname,
         }),
@@ -48,6 +59,66 @@ class CartPerksController {
       console.error('Cart upsell error:', error);
       button.disabled = false;
       button.textContent = originalText;
+    }
+  }
+
+  async handleGiftToggle(event) {
+    const checkbox = event.target.closest('[data-cart-gift-toggle]');
+    if (!checkbox) return;
+
+    const isGift = checkbox.checked;
+    const wrapper = document.querySelector('[data-cart-note-wrapper]');
+    const noteInput = document.querySelector('[data-cart-note-input]');
+
+    if (wrapper) {
+      wrapper.style.display = isGift || (noteInput && noteInput.value.trim()) ? 'block' : 'none';
+    }
+
+    await this.syncCartUpdate({
+      attributes: {
+        gift_order: isGift ? 'true' : 'false',
+      },
+      ...(isGift ? {} : { note: '' }),
+    });
+
+    if (!isGift && noteInput) {
+      noteInput.value = '';
+    }
+  }
+
+  handleNoteInput(event) {
+    const textarea = event.target.closest('[data-cart-note-input]');
+    if (!textarea) return;
+
+    const status = document.querySelector('[data-cart-note-status]');
+    if (status) status.textContent = 'Saving...';
+
+    clearTimeout(this.noteDebounceTimer);
+    this.noteDebounceTimer = setTimeout(async () => {
+      await this.syncCartUpdate({ note: textarea.value });
+      if (status) {
+        status.textContent = 'Saved';
+        setTimeout(() => {
+          if (status.textContent === 'Saved') status.textContent = '';
+        }, 1500);
+      }
+    }, 450);
+  }
+
+  async syncCartUpdate(payload) {
+    try {
+      const response = await fetch('/cart/update.js', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error('Failed to update cart note/attributes');
+      return await response.json();
+    } catch (error) {
+      console.error('Cart update error:', error);
     }
   }
 

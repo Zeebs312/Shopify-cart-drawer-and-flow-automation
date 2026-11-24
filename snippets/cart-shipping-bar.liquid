@@ -4,22 +4,66 @@
   assign remaining_cents = threshold_cents | minus: cart.total_price
   assign progress_percent = cart.total_price | times: 100 | divided_by: threshold_cents | at_most: 100
 
-  assign upsell_product = settings.cart_upsell_product
-  assign upsell_variant = upsell_product.selected_or_first_available_variant
-  assign upsell_in_cart = false
+  assign upsell_product = nil
+  assign upsell_variant = nil
 
-  if upsell_variant
-    for item in cart.items
-      if item.variant_id == upsell_variant.id
-        assign upsell_in_cart = true
-        break
+  comment
+    1. Scan cart items for a product-level metafield upsell not already in the cart
+  endcomment
+  for item in cart.items
+    assign candidate_product = item.product.metafields.custom.complementary_product.value
+    if candidate_product != blank
+      assign candidate_variant = candidate_product.selected_or_first_available_variant
+      assign candidate_in_cart = false
+
+      if candidate_variant != blank and candidate_variant.available
+        for check_item in cart.items
+          if check_item.variant_id == candidate_variant.id
+            assign candidate_in_cart = true
+            break
+          endif
+        endfor
+
+        if candidate_in_cart == false
+          assign upsell_product = candidate_product
+          assign upsell_variant = candidate_variant
+          break
+        endif
       endif
-    endfor
+    endif
+  endfor
+
+  comment
+    2. Fall back to global Theme Setting upsell if no metafield match was found
+  endcomment
+  if upsell_product == nil and settings.cart_upsell_product != blank
+    assign fallback_product = settings.cart_upsell_product
+    assign fallback_variant = fallback_product.selected_or_first_available_variant
+    assign fallback_in_cart = false
+
+    if fallback_variant != blank and fallback_variant.available
+      for check_item in cart.items
+        if check_item.variant_id == fallback_variant.id
+          assign fallback_in_cart = true
+          break
+        endif
+      endfor
+
+      if fallback_in_cart == false
+        assign upsell_product = fallback_product
+        assign upsell_variant = fallback_variant
+      endif
+    endif
   endif
 
   assign show_upsell = false
-  if remaining_cents > 0 and upsell_product != blank and upsell_variant != blank and upsell_variant.available and upsell_in_cart == false
+  if remaining_cents > 0 and upsell_product != blank and upsell_variant != blank
     assign show_upsell = true
+  endif
+
+  assign is_gift_order = false
+  if cart.attributes['gift_order'] == 'true'
+    assign is_gift_order = true
   endif
 -%}
 
@@ -59,4 +103,33 @@
       </button>
     </div>
   {%- endif -%}
+
+  <div
+    class="cart-note-box"
+    style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgb(var(--color-foreground-rgb) / 0.08); font-size: 0.8125rem;"
+  >
+    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none;">
+      <input
+        type="checkbox"
+        data-cart-gift-toggle
+        {% if is_gift_order %}checked{% endif %}
+      >
+      <span>This order is a gift (add gift message)</span>
+    </label>
+
+    <div
+      data-cart-note-wrapper
+      style="margin-top: 8px; {% unless is_gift_order or cart.note != blank %}display: none;{% endunless %}"
+    >
+      <textarea
+        data-cart-note-input
+        rows="2"
+        placeholder="Write your gift card note or delivery instructions..."
+        style="width: 100%; padding: 8px; font-size: 0.8125rem; border-radius: 6px; border: 1px solid rgb(var(--color-foreground-rgb) / 0.2); background: transparent; color: inherit; resize: vertical;"
+      >{{ cart.note }}</textarea>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+        <span data-cart-note-status style="font-size: 0.75rem; opacity: 0.7;"></span>
+      </div>
+    </div>
+  </div>
 </div>
